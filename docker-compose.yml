@@ -1,0 +1,19 @@
+services:
+  app:
+    build: .
+    volumes:
+      - '.:/app'
+      - '/app/node_modules'
+    stdin_open: true
+    container_name: '${COMPOSE_PROJECT_NAME}_app'
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_HOOK_ID=${DISCORD_HOOK_ID}
+      - DISCORD_HOOK_TOKEN=${DISCORD_HOOK_TOKEN}
+    ports:
+      - ${PORT}:3000
+    command: npm start

@@ -1,0 +1,21 @@
+{
+  "name": "slack-forward-docker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "build/app.js",
+  "scripts": {
+    "start": "ts-node app.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@slack/bolt": "^3.11.1",
+    "@slack/web-api": "^6.7.2",
+    "eris": "^0.17.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.8.1",
+    "typescript": "^4.7.3"
+  }
+}
