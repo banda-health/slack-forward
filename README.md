@@ -3,9 +3,8 @@ This app is meant to take the messages that GitHub publishes to Slack via it's S
 
 ### Inspiration
 It is based on and inspired by the following two repositories:
-
-https://github.com/HackSoc/slack-discord-bridge
-https://github.com/NickMandylas/slack-discord-bridge
+- https://github.com/HackSoc/slack-discord-bridge
+- https://github.com/NickMandylas/slack-discord-bridge
 
 ## Setup
 ### Slack & Discord Bots
