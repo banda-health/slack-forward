@@ -1,5 +1,6 @@
 services:
   app:
+    image: openhmis/slack-forward:${APP_VERSION}
     build: .
     volumes:
       - '.:/app'
@@ -16,4 +17,3 @@ services:
       - DISCORD_HOOK_TOKEN=${DISCORD_HOOK_TOKEN}
     ports:
       - ${PORT}:3000
-    command: npm start
