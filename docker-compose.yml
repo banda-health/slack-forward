@@ -1,6 +1,6 @@
 services:
   app:
-    image: openhmis/slack-forward:${APP_VERSION}
+    image: ghcr.io/banda-health/slack-forward:${APP_VERSION}
     build: .
     volumes:
       - '.:/app'
