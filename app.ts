@@ -1,5 +1,5 @@
-import { App, AppMentionEvent } from '@slack/bolt';
-import { WebClient } from '@slack/web-api';
+import { App, KnownEventFromType } from '@slack/bolt';
+import { GenericMessageEvent, SectionBlock, WebClient } from '@slack/web-api';
 import Eris, { WebhookPayload } from 'eris';
 import {
 	associate,
@@ -120,24 +120,24 @@ async function replaceUsernames(bodyText: string[]) {
  * @param slackMessage The message coming from slack
  * Here's the format for the slack message (the PRs are repeated for as many open in the repository):
  * ```
- * *Pending review on ORGANIZATION/REPOSITORY* - <Manage reminder|REMINDER_URL>
- * [#PR_NUMBER] <PR_LABEL|PR_URL> (_PR_AUTHOR_)
+ * *Pending review on ORGANIZATION/REPOSITORY* - <REMINDER_URL|Manage reminder>
+ * [#PR_NUMBER] <PR_URL|PR_LABEL> (_PR_AUTHOR_)
  * _STALENESS · AGE ·_ Waiting on _ COMMA_DELIMITED_REVIEWER_LIST_
  * ```
  * @returns A payload to send to Discord
  */
 async function constructDiscordEmbedPayload(
-	slackMessage: AppMentionEvent
+	slackMessage: GenericMessageEvent
 ): Promise<WebhookPayload> {
 	const channelRegex = /<#(?:.+?)\|([a-z0-9_-]{1,})>/g;
 	const hyperlinkRegex = /<.*\|.*>/g;
 
 	// channel names can't contain [&<>]
-	let cleanText = slackMessage.text.replace(channelRegex, '#$1');
-
-	// const prNumber = cleanText.match(/#\[\d+\]/)?.[0];
-	// const author = cleanText.match(/\(_(.*)_\)/)?.[1];
-	// const ageInformation = cleanText.match(/_(.*·.*)·/)?.[1]?.trim();
+	let textToUse =
+		slackMessage.blocks?.[0]?.type === 'section'
+			? (slackMessage.blocks?.[0] as SectionBlock)?.text?.text
+			: slackMessage.text;
+	let cleanText = textToUse?.replace(channelRegex, '#$1') || '';
 
 	// Update hyperlinks to match markdown mode
 	let match: RegExpExecArray | null | undefined;
@@ -205,7 +205,7 @@ async function fetchSlackProfile(user: string) {
 }
 
 async function forwardGitHubScheduleReminderToDiscord(
-	slackMessage: AppMentionEvent
+	slackMessage: GenericMessageEvent
 ) {
 	log(JSON.stringify(slackMessage, null, 3), 'slack', 3);
 	try {
@@ -215,7 +215,6 @@ async function forwardGitHubScheduleReminderToDiscord(
 			process.env.DISCORD_HOOK_TOKEN || '',
 			options
 		);
-		// console.log(JSON.stringify(options));
 	} catch (err) {
 		log(`Error while forwarding to Discord: ${err}`, 'slack', 0);
 	}
@@ -224,12 +223,15 @@ async function forwardGitHubScheduleReminderToDiscord(
 // Receive messages that have the following text in them
 slackApp.message('Pending review on banda-health', async ({ message }) => {
 	// Just forward the message to discord
-	forwardGitHubScheduleReminderToDiscord(message as unknown as AppMentionEvent);
+	forwardGitHubScheduleReminderToDiscord(
+		message as unknown as GenericMessageEvent
+	);
 });
 // Handle associates/dissociate from Slack
 slackApp.message('associate', async ({ message, say }) => {
 	// message format = associate [slackOrGitHubUsername] [discordUsername]
-	let contents = (message as unknown as AppMentionEvent).text.split(' ');
+	let contents =
+		(message as unknown as GenericMessageEvent).text?.split(' ') || [];
 	if (contents.length !== 3) {
 		await say(
 			'Please provide a message of the format `associate [slackOrGitHubUsername] [discordUsername]`'
@@ -240,7 +242,8 @@ slackApp.message('associate', async ({ message, say }) => {
 });
 slackApp.message('dissociate', async ({ message, say }) => {
 	// message format = dissociate [slackOrGitHubUsername]
-	let contents = (message as unknown as AppMentionEvent).text.split(' ');
+	let contents =
+		(message as unknown as GenericMessageEvent).text?.split(' ') || [];
 	if (contents.length !== 2) {
 		await say(
 			'Please provide a message of the format `dissociate [slackOrGitHubUsername]`'
