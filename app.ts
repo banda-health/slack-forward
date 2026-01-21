@@ -134,7 +134,7 @@ async function constructDiscordEmbedPayload(
 
 	// channel names can't contain [&<>]
 	let title = '';
-	let bodyText: string[] = [];
+	let description = '';
 	if (slackMessage.blocks?.[0]?.type === 'rich_text') {
 		let elements = (slackMessage.blocks?.[0] as RichTextBlock)?.elements?.[0]?.elements;
 		// If the first message is a text block, use it as the title
@@ -147,8 +147,18 @@ async function constructDiscordEmbedPayload(
 			// Remove the manage reminder block
 			elements.shift();
 		}
-		bodyText = [elements.reduce((text, element) => {
+		let areCheckingUserNames = false;
+		description = elements.reduce((text, element) => {
 			if (element.type === 'text') {
+				if (element.text.includes('Waiting on')) {
+					areCheckingUserNames = true;
+				} else if (element.text.startsWith('\n')) {
+					areCheckingUserNames = false;
+				} else if (areCheckingUserNames) {
+					return text + ' ' + element.text.split(', ').map((userName) => {
+						return `<@${getDiscordUserNameFromGitHubOrSlackUsername(userName.trim())}>`
+					}).join(', ');
+				}
 				if (element.text.includes('\n\n')) {
 					return text + element.text.split('\n\n')[1];
 				}
@@ -166,7 +176,7 @@ async function constructDiscordEmbedPayload(
 				return text + `[${element.text}](${element.url})`;
 			}
 			return text;
-		}, '')];
+		}, '');
 	} else {
 		let textToUse =
 			slackMessage.blocks?.[0]?.type === 'section'
@@ -206,12 +216,12 @@ async function constructDiscordEmbedPayload(
 
 		// Split the message into it's two parts: the title and the body
 		title = cleanText.split('*')[1];
-		bodyText = cleanText.split(/\r?\n/).filter((content) => !!content);
+		let bodyText = cleanText.split(/\r?\n/).filter((content) => !!content);
 		// Remove the first element, since that's the title
 		bodyText.shift();
-	}
 
-	let description = (await replaceUsernames(bodyText)).join('\n');
+		description = (await replaceUsernames(bodyText)).join('\n');
+	}
 
 	// Lastly we need to shift the PR link to include the [#PR_NUMBER] piece
 	description = description.replaceAll(/(\[#\d+\]\s)\[/g, '[$1');
@@ -254,11 +264,11 @@ async function forwardGitHubScheduleReminderToDiscord(
 	log(JSON.stringify(slackMessage, null, 3), 'slack', 3);
 	try {
 		const options = await constructDiscordEmbedPayload(slackMessage);
-		discordBot.executeWebhook(
-			process.env.DISCORD_HOOK_ID || '',
-			process.env.DISCORD_HOOK_TOKEN || '',
-			options
-		);
+		// discordBot.executeWebhook(
+		// 	process.env.DISCORD_HOOK_ID || '',
+		// 	process.env.DISCORD_HOOK_TOKEN || '',
+		// 	options
+		// );
 	} catch (err) {
 		log(`Error while forwarding to Discord: ${err}`, 'slack', 0);
 	}
