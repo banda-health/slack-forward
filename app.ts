@@ -1,5 +1,5 @@
-import { App, KnownEventFromType } from '@slack/bolt';
-import { GenericMessageEvent, SectionBlock, WebClient } from '@slack/web-api';
+import { App } from '@slack/bolt';
+import { GenericMessageEvent, RichTextBlock, RichTextText, SectionBlock, WebClient } from '@slack/web-api';
 import Eris, { WebhookPayload } from 'eris';
 import {
 	associate,
@@ -72,12 +72,12 @@ async function replaceUsernames(bodyText: string[]) {
 	for (let replacement of userReplacements) {
 		bodyText = bodyText.map(
 			(text) =>
-				(text = text.replace(
-					replacement.match[0],
-					`<@${getDiscordUserNameFromGitHubOrSlackUsername(
-						replacement.username || ''
-					)}>`
-				))
+			(text = text.replace(
+				replacement.match[0],
+				`<@${getDiscordUserNameFromGitHubOrSlackUsername(
+					replacement.username || ''
+				)}>`
+			))
 		);
 	}
 
@@ -130,42 +130,86 @@ async function constructDiscordEmbedPayload(
 	slackMessage: GenericMessageEvent
 ): Promise<WebhookPayload> {
 	const channelRegex = /<#(?:.+?)\|([a-z0-9_-]{1,})>/g;
-	const hyperlinkRegex = /<.*\|.*>/g;
+	const hyperlinkRegex = /<([^\|>]+)\|([^>]+)>/g;
 
 	// channel names can't contain [&<>]
-	let textToUse =
-		slackMessage.blocks?.[0]?.type === 'section'
-			? (slackMessage.blocks?.[0] as SectionBlock)?.text?.text
-			: slackMessage.text;
-	let cleanText = textToUse?.replace(channelRegex, '#$1') || '';
-
-	// Update hyperlinks to match markdown mode
-	let match: RegExpExecArray | null | undefined;
-	while ((match = hyperlinkRegex.exec(cleanText))) {
-		const [hyperlink, linkText] = match[0]
-			.replace('<', '')
-			.replace('>', '')
-			.split('|');
-		// If this is the manage reminder, we don't want it in the Discord message
-		if (linkText === 'Manage reminder') {
-			cleanText.replace(` - ${match[0]}`, '');
-			continue;
+	let title = '';
+	let bodyText: string[] = [];
+	if (slackMessage.blocks?.[0]?.type === 'rich_text') {
+		let elements = (slackMessage.blocks?.[0] as RichTextBlock)?.elements?.[0]?.elements;
+		// If the first message is a text block, use it as the title
+		if (elements[0]?.type === 'text') {
+			title = (elements[0] as RichTextText).text;
+			// Remove the title block
+			elements.shift();
+			// Remove the dash block
+			elements.shift();
+			// Remove the manage reminder block
+			elements.shift();
 		}
-		cleanText = cleanText.replace(match[0], `[${linkText}](${hyperlink})`);
+		bodyText = [elements.reduce((text, element) => {
+			if (element.type === 'text') {
+				if (element.text.includes('\n\n')) {
+					return text + element.text.split('\n\n')[1];
+				}
+				if (element.style?.bold) {
+					return text + `**${element.text}**`;
+				}
+				if (element.style?.italic) {
+					return text + `*${element.text}*`;
+				}
+				if (element.style?.strike) {
+					return text + `~~${element.text}~~`;
+				}
+				return text + element.text;
+			} else if (element.type === 'link') {
+				return text + `[${element.text}](${element.url})`;
+			}
+			return text;
+		}, '')];
+	} else {
+		let textToUse =
+			slackMessage.blocks?.[0]?.type === 'section'
+				? (slackMessage.blocks?.[0] as SectionBlock)?.text?.text
+				: slackMessage.text;
+		let cleanText = textToUse?.replace(channelRegex, '#$1') || '';
+
+		// Update hyperlinks to match markdown mode
+		// Collect all matches first to avoid issues with modifying string during iteration
+		const hyperlinkMatches: RegExpExecArray[] = [];
+		let match: RegExpExecArray | null | undefined;
+		// Reset lastIndex to ensure we start from the beginning
+		hyperlinkRegex.lastIndex = 0;
+		while ((match = hyperlinkRegex.exec(cleanText))) {
+			hyperlinkMatches.push(match);
+		}
+
+		// Process matches in reverse order to maintain correct indices when replacing
+		for (let i = hyperlinkMatches.length - 1; i >= 0; i--) {
+			match = hyperlinkMatches[i];
+			const hyperlink = match[1];
+			const linkText = match[2];
+			// If this is the manage reminder, we don't want it in the Discord message
+			if (linkText === 'Manage reminder') {
+				cleanText = cleanText.replace(` - ${match[0]}`, '');
+				continue;
+			}
+			cleanText = cleanText.replace(match[0], `[${linkText}](${hyperlink})`);
+		}
+
+		// Now that links are replaced and properly formatted, handle general clean-up
+		// /g is important.
+		cleanText = cleanText
+			.replace(/&gt;/g, '>')
+			.replace(/&lt;/g, '<')
+			.replace(/&amp;/g, '&');
+
+		// Split the message into it's two parts: the title and the body
+		title = cleanText.split('*')[1];
+		bodyText = cleanText.split(/\r?\n/).filter((content) => !!content);
+		// Remove the first element, since that's the title
+		bodyText.shift();
 	}
-
-	// Now that links are replaced and properly formatted, handle general clean-up
-	// /g is important.
-	cleanText = cleanText
-		.replace(/&gt;/g, '>')
-		.replace(/&lt;/g, '<')
-		.replace(/&amp;/g, '&');
-
-	// Split the message into it's two parts: the title and the body
-	let title = cleanText.split('*')[1];
-	let bodyText = cleanText.split(/\r?\n/).filter((content) => !!content);
-	// Remove the first element, since that's the title
-	bodyText.shift();
 
 	let description = (await replaceUsernames(bodyText)).join('\n');
 
