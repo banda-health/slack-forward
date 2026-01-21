@@ -264,11 +264,11 @@ async function forwardGitHubScheduleReminderToDiscord(
 	log(JSON.stringify(slackMessage, null, 3), 'slack', 3);
 	try {
 		const options = await constructDiscordEmbedPayload(slackMessage);
-		// discordBot.executeWebhook(
-		// 	process.env.DISCORD_HOOK_ID || '',
-		// 	process.env.DISCORD_HOOK_TOKEN || '',
-		// 	options
-		// );
+		discordBot.executeWebhook(
+			process.env.DISCORD_HOOK_ID || '',
+			process.env.DISCORD_HOOK_TOKEN || '',
+			options
+		);
 	} catch (err) {
 		log(`Error while forwarding to Discord: ${err}`, 'slack', 0);
 	}
