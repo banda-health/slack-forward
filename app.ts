@@ -1,5 +1,11 @@
 import { App } from '@slack/bolt';
-import { GenericMessageEvent, RichTextBlock, RichTextText, SectionBlock, WebClient } from '@slack/web-api';
+import {
+	GenericMessageEvent,
+	RichTextBlock,
+	RichTextText,
+	SectionBlock,
+	WebClient,
+} from '@slack/web-api';
 import Eris, { WebhookPayload } from 'eris';
 import {
 	associate,
@@ -41,7 +47,7 @@ const slack_profiles_cache: {
 } = {};
 
 async function resolveSlackUserReplacement(
-	match: RegExpExecArray
+	match: RegExpExecArray,
 ): Promise<SlackReplacementResult> {
 	const profile = await fetchSlackProfile(match[1]);
 	return {
@@ -72,12 +78,12 @@ async function replaceUsernames(bodyText: string[]) {
 	for (let replacement of userReplacements) {
 		bodyText = bodyText.map(
 			(text) =>
-			(text = text.replace(
-				replacement.match[0],
-				`<@${getDiscordUserNameFromGitHubOrSlackUsername(
-					replacement.username || ''
-				)}>`
-			))
+				(text = text.replace(
+					replacement.match[0],
+					`<@${getDiscordUserNameFromGitHubOrSlackUsername(
+						replacement.username || '',
+					)}>`,
+				)),
 		);
 	}
 
@@ -92,21 +98,21 @@ async function replaceUsernames(bodyText: string[]) {
 			.replaceAll('_', '')
 			.split(',')
 			.map((discordOrGitHubOrSlackUsername) =>
-				discordOrGitHubOrSlackUsername.trim()
+				discordOrGitHubOrSlackUsername.trim(),
 			)
 			.filter(
 				(discordOrGitHubOrSlackUsername) =>
-					!discordOrGitHubOrSlackUsername.includes('@')
+					!discordOrGitHubOrSlackUsername.includes('@'),
 			)
 			.reduce(
 				(discordReviewerString, gitHubOrSlackUsername) =>
 					discordReviewerString.replace(
 						gitHubOrSlackUsername,
 						`<@${getDiscordUserNameFromGitHubOrSlackUsername(
-							gitHubOrSlackUsername
-						)}>`
+							gitHubOrSlackUsername,
+						)}>`,
 					),
-				discordReviewers
+				discordReviewers,
 			);
 
 		return `${prInfoParts[0]}Waiting on${discordReviewers}`;
@@ -127,7 +133,7 @@ async function replaceUsernames(bodyText: string[]) {
  * @returns A payload to send to Discord
  */
 async function constructDiscordEmbedPayload(
-	slackMessage: GenericMessageEvent
+	slackMessage: GenericMessageEvent,
 ): Promise<WebhookPayload> {
 	const channelRegex = /<#(?:.+?)\|([a-z0-9_-]{1,})>/g;
 	const hyperlinkRegex = /<([^\|>]+)\|([^>]+)>/g;
@@ -136,28 +142,32 @@ async function constructDiscordEmbedPayload(
 	let title = '';
 	let description = '';
 	if (slackMessage.blocks?.[0]?.type === 'rich_text') {
-		let elements = (slackMessage.blocks?.[0] as RichTextBlock)?.elements?.[0]?.elements;
+		let elements = (slackMessage.blocks?.[0] as RichTextBlock)?.elements;
 		// If the first message is a text block, use it as the title
-		if (elements[0]?.type === 'text') {
-			title = (elements[0] as RichTextText).text;
-			// Remove the title block
-			elements.shift();
-			// Remove the dash block
-			elements.shift();
-			// Remove the manage reminder block
-			elements.shift();
-		}
+		title = (elements[0].elements[0] as RichTextText).text;
 		let areCheckingUserNames = false;
-		description = elements.reduce((text, element) => {
+		description = elements[1].elements.reduce((text, element) => {
 			if (element.type === 'text') {
 				if (element.text.includes('Waiting on')) {
 					areCheckingUserNames = true;
 				} else if (element.text.startsWith('\n')) {
 					areCheckingUserNames = false;
 				} else if (areCheckingUserNames) {
-					return text + ' ' + element.text.split(', ').map((userName) => {
-						return `<@${getDiscordUserNameFromGitHubOrSlackUsername(userName.trim())}>`
-					}).join(', ');
+					return (
+						text +
+						' ' +
+						element.text
+							.split(', ')
+							.map((userName) => {
+								const discordUserName =
+									getDiscordUserNameFromGitHubOrSlackUsername(userName.trim());
+								if (discordUserName) {
+									return `<@${discordUserName}>`;
+								}
+								return userName.trim();
+							})
+							.join(', ')
+					);
 				}
 				if (element.text.includes('\n\n')) {
 					return text + element.text.split('\n\n')[1];
@@ -240,7 +250,7 @@ async function fetchSlackProfile(user: string) {
 		log(
 			`Profile '${slack_profiles_cache[user].username}' (${user}) already in cache`,
 			'slack',
-			3
+			3,
 		);
 		return slack_profiles_cache[user];
 	}
@@ -259,7 +269,7 @@ async function fetchSlackProfile(user: string) {
 }
 
 async function forwardGitHubScheduleReminderToDiscord(
-	slackMessage: GenericMessageEvent
+	slackMessage: GenericMessageEvent,
 ) {
 	log(JSON.stringify(slackMessage, null, 3), 'slack', 3);
 	try {
@@ -267,7 +277,7 @@ async function forwardGitHubScheduleReminderToDiscord(
 		discordBot.executeWebhook(
 			process.env.DISCORD_HOOK_ID || '',
 			process.env.DISCORD_HOOK_TOKEN || '',
-			options
+			options,
 		);
 	} catch (err) {
 		log(`Error while forwarding to Discord: ${err}`, 'slack', 0);
@@ -278,7 +288,7 @@ async function forwardGitHubScheduleReminderToDiscord(
 slackApp.message('Pending review on banda-health', async ({ message }) => {
 	// Just forward the message to discord
 	forwardGitHubScheduleReminderToDiscord(
-		message as unknown as GenericMessageEvent
+		message as unknown as GenericMessageEvent,
 	);
 });
 // Handle associates/dissociate from Slack
@@ -288,7 +298,7 @@ slackApp.message('associate', async ({ message, say }) => {
 		(message as unknown as GenericMessageEvent).text?.split(' ') || [];
 	if (contents.length !== 3) {
 		await say(
-			'Please provide a message of the format `associate [slackOrGitHubUsername] [discordUsername]`'
+			'Please provide a message of the format `associate [slackOrGitHubUsername] [discordUsername]`',
 		);
 		return;
 	}
@@ -300,7 +310,7 @@ slackApp.message('dissociate', async ({ message, say }) => {
 		(message as unknown as GenericMessageEvent).text?.split(' ') || [];
 	if (contents.length !== 2) {
 		await say(
-			'Please provide a message of the format `dissociate [slackOrGitHubUsername]`'
+			'Please provide a message of the format `dissociate [slackOrGitHubUsername]`',
 		);
 		return;
 	}
