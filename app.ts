@@ -149,14 +149,12 @@ async function constructDiscordEmbedPayload(
 		description = elements[1].elements.reduce((text, element) => {
 			if (element.type === 'text') {
 				if (element.text.includes('Waiting on')) {
-					areCheckingUserNames = true;
-				} else if (element.text.startsWith('\n')) {
-					areCheckingUserNames = false;
-				} else if (areCheckingUserNames) {
 					return (
 						text +
-						' ' +
+						element.text.split('_')[0] +
+						'_' +
 						element.text
+							.split('_')[1]
 							.split(', ')
 							.map((userName) => {
 								const discordUserName =
@@ -168,6 +166,9 @@ async function constructDiscordEmbedPayload(
 							})
 							.join(', ')
 					);
+				} else if (element.text.startsWith('\n')) {
+					areCheckingUserNames = false;
+				} else if (areCheckingUserNames) {
 				}
 				if (element.text.includes('\n\n')) {
 					return text + element.text.split('\n\n')[1];

@@ -17,3 +17,4 @@ services:
       - DISCORD_HOOK_TOKEN=${DISCORD_HOOK_TOKEN}
     ports:
       - ${PORT}:3000
+    # command: tail -f /dev/null
